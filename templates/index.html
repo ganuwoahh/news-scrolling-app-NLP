@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}News Article Recommender App{% endblock %}
+
+{% block styles %}
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        position: relative;
+    }
+    .image-container {
+        position: relative;
+        width: 50%;
+        height: 80vh;
+        overflow: hidden;
+    }
+    img {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 100%;
+        max-height: 100%;
+        transition: opacity 0.5s ease-in-out;
+        cursor: pointer;
+    }
+    .top-half,
+    .bottom-half {
+        position: absolute;
+        width: 100%;
+        height: 50%;
+        cursor: pointer;
+    }
+    .top-half {
+        top: 0;
+        left: 0;
+    }
+    .bottom-half {
+        bottom: 0;
+        left: 0;
+    }
+    .buttons-container {
+        position: absolute;
+        top: 50%;
+        right: 20px;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="image-container">
+        <img src="{{ images[0] }}" id="current-image">
+        <div class="top-half" onclick="prevImage()"></div>
+        <div class="bottom-half" onclick="nextImage()"></div>
+    </div>
+
+    <div class="buttons-container">
+        <button class="button" onclick="like()">Like</button>
+        <button class="button" onclick="dislike()">Dislike</button>
+    </div>
+
+    <script>
+        let currentIndex = 0;
+        const images = {{ images | tojson }};
+        const imgElement = document.getElementById('current-image');
+
+        function nextImage() {
+            if (currentIndex < images.length - 1) {
+                currentIndex++;
+                imgElement.style.opacity = 0;
+                setTimeout(() => {
+                    imgElement.src = images[currentIndex];
+                    imgElement.style.opacity = 1;
+                }, 500);
+            }
+        }
+
+        function prevImage() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                imgElement.style.opacity = 0;
+                setTimeout(() => {
+                    imgElement.src = images[currentIndex];
+                    imgElement.style.opacity = 1;
+                }, 500);
+            }
+        }
+
+        function like() {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/like", true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.send(JSON.stringify({ liked: true }));
+            console.log('Image liked!');
+        }
+
+        function dislike() {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/dislike", true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.send(JSON.stringify({ disliked: true }));
+            console.log('Image disliked!');
+            nextImage();
+        }
+    </script>
+{% endblock %}
