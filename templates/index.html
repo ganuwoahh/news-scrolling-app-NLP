@@ -4,50 +4,17 @@
 
 {% block styles %}
 <style>
-    body {
-        margin: 0;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-        position: relative;
-    }
     .image-container {
         position: relative;
-        width: 50%;
+        width: 75%;
+        margin: auto;
         height: 80vh;
-        overflow: hidden;
-    }
-    img {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        max-width: 100%;
-        max-height: 100%;
-        transition: opacity 0.5s ease-in-out;
-        cursor: pointer;
-    }
-    .top-half,
-    .bottom-half {
-        position: absolute;
-        width: 100%;
-        height: 50%;
-        cursor: pointer;
-    }
-    .top-half {
-        top: 0;
-        left: 0;
-    }
-    .bottom-half {
-        bottom: 0;
-        left: 0;
+        overflow: show;
     }
     .buttons-container {
         position: absolute;
         top: 50%;
-        right: 20px;
+        left: 20px;
         transform: translateY(-50%);
         display: flex;
         flex-direction: column;
@@ -61,63 +28,119 @@
         border-radius: 5px;
         cursor: pointer;
     }
+    #title {
+        font-size: 32px;
+        font-family: 'Verdana', sans-serif;
+        text-align: center;
+        margin-top: 20px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-    <div class="image-container">
-        <img src="{{ images[0] }}" id="current-image">
-        <div class="top-half" onclick="prevImage()"></div>
-        <div class="bottom-half" onclick="nextImage()"></div>
+    <div class="image-container" id="image-container">
+        <div id="title"></div>
+        <img id="current-image" onclick="redirectToLink()">
     </div>
 
     <div class="buttons-container">
+        <button class="button" onclick="prevImage()">
+            <img src="{{ url_for('static', filename='images/up_arrow.png') }}" alt="Up Arrow">
+        </button>
+        <button class="button" onclick="nextImage()">
+            <img src="{{ url_for('static', filename='images/down_arrow.png') }}" alt="Down Arrow">
+        </button>        
         <button class="button" onclick="like()">Like</button>
         <button class="button" onclick="dislike()">Dislike</button>
     </div>
 
     <script>
+        let currentLink = '#';
         let currentIndex = 0;
-        const images = {{ images | tojson }};
         const imgElement = document.getElementById('current-image');
-
+    
         function nextImage() {
-            if (currentIndex < images.length - 1) {
+            if (currentIndex === history.length - 1) {
+                fetchData();
+            } else {
                 currentIndex++;
-                imgElement.style.opacity = 0;
-                setTimeout(() => {
-                    imgElement.src = images[currentIndex];
-                    imgElement.style.opacity = 1;
-                }, 500);
+                displayFromHistory();
             }
         }
-
+    
         function prevImage() {
             if (currentIndex > 0) {
                 currentIndex--;
-                imgElement.style.opacity = 0;
-                setTimeout(() => {
-                    imgElement.src = images[currentIndex];
-                    imgElement.style.opacity = 1;
-                }, 500);
+                displayFromHistory();
             }
         }
-
+    
         function like() {
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", "/like", true);
-            xhr.setRequestHeader("Content-Type", "application/json");
-            xhr.send(JSON.stringify({ liked: true }));
+            sendFeedback(2);
             console.log('Image liked!');
         }
-
+    
         function dislike() {
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", "/dislike", true);
-            xhr.setRequestHeader("Content-Type", "application/json");
-            xhr.send(JSON.stringify({ disliked: true }));
+            sendFeedback(0.7);
             console.log('Image disliked!');
-            nextImage();
         }
-    </script>
+    
+        function fetchData() {
+            fetch('/get_random_title')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('title').textContent = data.title;
+                imgElement.src = data.photo;
+                currentLink = data.link;
+                storeData(data.title, data.link, data.photo);
+            });
+        }
+    
+        function redirectToLink() {
+            window.open(currentLink, '_blank');
+        }
+    
+        function sendFeedback(rating) {
+            const data = {
+                title: history[currentIndex].title,
+                link: history[currentIndex].link,
+                rating: rating
+            };
+    
+            fetch('/send-feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log('Feedback sent successfully!');
+                } else {
+                    console.error('Failed to send feedback!');
+                }
+            })
+            .catch(error => {
+                console.error('Error sending feedback:', error);
+            });
+        }
+    
+        function displayFromHistory() {
+            const historyItem = history[currentIndex];
+            document.getElementById('title').textContent = historyItem.title;
+            imgElement.src = historyItem.photo;
+            currentLink = historyItem.link;
+        }
+    
+        let history = [];
+    
+        function storeData(title, link, photo) {
+            history.push({ title: title, link: link, photo: photo });
+        }
+    
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchData();
+        });
+    </script>       
 {% endblock %}

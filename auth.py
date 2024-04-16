@@ -8,7 +8,7 @@ auth = Blueprint('auth', __name__)
 @auth.route('/')
 @login_required
 def home():
-    return render_template("home.html",  user = current_user)
+    return render_template("login.html",  user = current_user)
 
 @auth.route('/login', methods = ['GET', 'POST'])
 def login():

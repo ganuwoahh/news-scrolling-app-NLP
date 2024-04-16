@@ -1,11 +1,14 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, session
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from .models import User
 from . import db
 from flask_login import login_user, logout_user, login_required, current_user
 from cachetools import LRUCache
 from random import randint
 from sqlalchemy.sql.expression import func
-import math
+import random
+import pandas as pd
+
+data = pd.read_csv(r'C:\Users\scxrp\Downloads\sem_6\nlp\project\website\static\real_cleaned_news_data_2.tsv', sep='\t', encoding='ISO-8859-1')
 
 views = Blueprint('views', __name__)
 auth = Blueprint('auth', __name__)
@@ -90,3 +93,29 @@ def dislike():
     if data and data.get('disliked'):
         print('Image disliked!')
     return '', 204
+
+@views.route('/get_random_title')
+def get_random_title():
+    random_row = data.sample(1).iloc[0]
+    topic = random_row['topic'].lower()
+    title = random_row['title']
+    link = random_row['link']
+    
+    photo_number = random.randint(1, 10)
+    photo_path = f'static/tozip_photos/{topic}_{photo_number}.jpg'
+
+    return jsonify(title=title, photo=photo_path, link=link)
+
+@views.route('/send-feedback', methods=['POST'])
+def send_feedback():
+    data = request.json
+    if data and 'title' in data and 'link' in data and 'rating' in data:
+        title = data['title']
+        link = data['link']
+        rating = data['rating']
+        
+        print(f'Received feedback: Title: {title}, Link: {link}, Rating: {rating}')
+
+        return jsonify(message='Feedback received'), 200
+    else:
+        return jsonify(error='Invalid data'), 400

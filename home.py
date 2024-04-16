@@ -5,15 +5,9 @@ from flask import Blueprint, render_template, request
 
 home_blueprint = Blueprint('home', __name__, template_folder='templates')
 
-images = [
-    "https://i.ibb.co/23yppmv/bollywood.png",
-    "https://i.ibb.co/d4RLr2K/politics.png",
-    "https://i.ibb.co/v3JP3f8/sports.png",
-]
-
 @home_blueprint.route('/home')
 def index():
-    return render_template('index.html', images=images)
+    return render_template('index.html')
 
 @home_blueprint.route('/home/like', methods=['POST'])
 def like():
