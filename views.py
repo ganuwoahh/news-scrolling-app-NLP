@@ -3,12 +3,13 @@ from .models import User
 from . import db
 from flask_login import login_user, logout_user, login_required, current_user
 from cachetools import LRUCache
-from random import randint
+from random import choices
 from sqlalchemy.sql.expression import func
 import random
 import pandas as pd
+import logging
 
-data = pd.read_csv(r'C:\Users\scxrp\Downloads\sem_6\nlp\project\website\static\real_cleaned_news_data_2.tsv', sep='\t', encoding='ISO-8859-1')
+data = pd.read_excel(r'C:\Users\scxrp\Downloads\sem_6\nlp\project\website\static\demo.xlsx')
 
 views = Blueprint('views', __name__)
 auth = Blueprint('auth', __name__)
@@ -21,7 +22,6 @@ def home():
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email')
         username = request.form.get('username')
         password = request.form.get('password')
          
@@ -72,13 +72,7 @@ def sign_up():
 @views.route('/home', methods=['GET', 'POST'])
 @login_required
 def index():
-    
-    images = [
-    "https://i.ibb.co/23yppmv/bollywood.png",
-    "https://i.ibb.co/d4RLr2K/politics.png",
-    "https://i.ibb.co/v3JP3f8/sports.png",
-    ]
-    return render_template("index.html", user=current_user, images = images)
+    return render_template("index.html", user=current_user)
 
 @views.route('/home/like', methods=['POST'])
 def like():
@@ -96,26 +90,130 @@ def dislike():
 
 @views.route('/get_random_title')
 def get_random_title():
-    random_row = data.sample(1).iloc[0]
-    topic = random_row['topic'].lower()
+    # Retrieve the current user's probabilities from the database
+    user = User.query.filter_by(username=current_user.username).first()
+    
+    # Extract probabilities from the user object
+    probabilities = [
+        user.nation_prob, user.finance_prob, user.world_prob,
+        user.science_prob, user.health_prob, user.business_prob,
+        user.technology_prob, user.sports_prob
+    ]
+    
+    # Topics corresponding to the probabilities
+    topics = [
+        'nation', 'finance', 'world', 'science',
+        'health', 'business', 'technology', 'sports'
+    ]
+    
+    # Choose a topic based on the probabilities
+    chosen_topic = choices(topics, probabilities)[0]
+    
+    logging.info(f"Chosen topic: {chosen_topic.upper()}")  # Add logging to check the chosen topic
+    
+    # Retrieve rows from the database that match the chosen topic
+    topic_data = data[data['topic'] == chosen_topic.upper()]
+    
+    # Check if there are any rows for the chosen topic
+    if topic_data.empty:
+        logging.error(f"No data found for topic: {chosen_topic}")
+        return jsonify(error="No data found for chosen topic"), 404
+    
+    # Select a random row from the topic data
+    random_row = topic_data.sample(1).iloc[0]
+    
+    # Extract data from the random row
     title = random_row['title']
     link = random_row['link']
-    
-    photo_number = random.randint(1, 10)
-    photo_path = f'static/tozip_photos/{topic}_{photo_number}.jpg'
+    photo_number = random.randint(1, 10)  # Assuming photo numbers are still used
+    photo_path = f"static/tozip_photos/{chosen_topic}_{photo_number}.jpg"
 
-    return jsonify(title=title, photo=photo_path, link=link)
+    # Return the randomly selected title along with other data
+    return jsonify(title=title, photo=photo_path, link=link, topic=chosen_topic)
+
+@views.route('/protected')
+@login_required
+def protected_route():
+    
+    user_id = current_user.id
+    username = current_user.username
+    
+    return f'Current User ID: {user_id}, Username: {username}'
 
 @views.route('/send-feedback', methods=['POST'])
+@login_required
 def send_feedback():
+    def calculate_updated_probabilities(initial_probabilities, rating, rated_topic):
+        # Define the minimum and maximum probabilities for a topic
+        min_probability = 0.0125  # 1.25%
+        max_probability = 0.3  # 30%
+        
+        # Define the weight change for the rated topic
+        weight_change = 0.02  # Adjust as needed
+        
+        if rating == 0.7:  # Dislike rating
+            weight_change *= -1  # Decrease weight for disliked topic
+        
+        # Calculate the new total weight for normalization
+        total_weight = sum(initial_probabilities.values()) + weight_change
+        
+        # Calculate the new probabilities
+        updated_probabilities = {}
+        for topic, probability in initial_probabilities.items():
+            if topic == rated_topic:
+                updated_probabilities[topic] = max(min(probability + weight_change, max_probability), min_probability)
+            else:
+                updated_probabilities[topic] = max(min(probability - weight_change / (len(initial_probabilities) - 1), max_probability), min_probability)
+        
+        # Normalize the probabilities
+        updated_probabilities = {topic: prob / total_weight for topic, prob in updated_probabilities.items()}
+        
+        return updated_probabilities
+
+    
     data = request.json
-    if data and 'title' in data and 'link' in data and 'rating' in data:
+    if data and 'title' in data and 'link' in data and 'rating' in data and 'topic' in data:
         title = data['title']
         link = data['link']
         rating = data['rating']
+        rated_topic = data['topic']  # Retrieve the rated topic from the request
         
-        print(f'Received feedback: Title: {title}, Link: {link}, Rating: {rating}')
-
+        # Assign the current user to the user variable
+        user = current_user
+        
+        # Check if current_user is available
+        print(f"Current User ID: {user.id}, Username: {user.username}")
+        
+        # Define the initial probabilities
+        initial_probabilities = {
+            'nation': user.nation_prob,
+            'finance': user.finance_prob,
+            'world': user.world_prob,
+            'science': user.science_prob,
+            'health': user.health_prob,
+            'business': user.business_prob,
+            'technology': user.technology_prob,
+            'sports': user.sports_prob
+        }
+        
+        # Calculate the new probabilities based on user feedback
+        updated_probabilities = calculate_updated_probabilities(initial_probabilities, rating, rated_topic)
+        
+        # Update the user's probabilities in the database
+        user.nation_prob = updated_probabilities['nation']
+        user.finance_prob = updated_probabilities['finance']
+        user.world_prob = updated_probabilities['world']
+        user.science_prob = updated_probabilities['science']
+        user.health_prob = updated_probabilities['health']
+        user.business_prob = updated_probabilities['business']
+        user.technology_prob = updated_probabilities['technology']
+        user.sports_prob = updated_probabilities['sports']
+        
+        # Commit the changes to the database
+        db.session.commit()
+        
+        print(f'Received feedback: Title: {title}, Link: {link}, Rating: {rating}, Rated Topic: {rated_topic}')
+        
         return jsonify(message='Feedback received'), 200
     else:
         return jsonify(error='Invalid data'), 400
